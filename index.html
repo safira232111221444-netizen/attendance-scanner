@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>Daily Attendance</title>
+
+  <script src="https://unpkg.com/html5-qrcode"></script>
+
+  <style>
+
+    body {
+      font-family: Arial, sans-serif;
+      background: #f2f4f7;
+      margin: 0;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .container {
+      max-width: 500px;
+      margin: auto;
+      background: white;
+      padding: 25px;
+      border-radius: 18px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+
+    h1 {
+      margin-top: 0;
+    }
+
+    #reader {
+      width: 100%;
+      margin-top: 20px;
+    }
+
+    #result {
+      margin-top: 20px;
+      padding: 20px;
+      border-radius: 12px;
+      background: #f1f1f1;
+      font-size: 18px;
+      min-height: 30px;
+    }
+
+    .success {
+      background: #dff5e3 !important;
+    }
+
+    .error {
+      background: #ffe0e0 !important;
+    }
+
+    .name {
+      font-size: 25px;
+      font-weight: bold;
+    }
+
+    .action {
+      font-size: 22px;
+      font-weight: bold;
+      margin-top: 10px;
+    }
+
+    button {
+      border: none;
+      border-radius: 10px;
+      padding: 14px 25px;
+      font-size: 18px;
+      cursor: pointer;
+      margin-top: 15px;
+    }
+
+  </style>
+
+</head>
+
+<body>
+
+<div class="container">
+
+  <h1>Daily Attendance</h1>
+
+  <p>Scan the employee's QR code</p>
+
+  <div id="reader"></div>
+
+  <div id="result">
+    Waiting for scanner...
+  </div>
+
+</div>
+
+
+<script>
+
+
+// =====================================================
+// GOOGLE APPS SCRIPT WEB APP URL
+// =====================================================
+
+const API_URL =
+  "https://script.google.com/macros/s/AKfycbyeHzP9DSMZOnQHtK3Ok5MpTP_CggFZf-QlvOX48ja5QEIAqfBe9AHE88_zSQOza1tm/exec";
+
+
+// =====================================================
+// API TOKEN
+// Must match the token in Apps Script
+// =====================================================
+
+const API_TOKEN =
+  "ATTENDANCE-2026-9X7K-PHILIPPINES";
+
+
+let scanner = null;
+let scanning = false;
+
+
+// =====================================================
+// SEND ATTENDANCE TO GOOGLE APPS SCRIPT
+// =====================================================
+
+function sendAttendance(employeeId) {
+
+  const callbackName =
+    "attendanceCallback_" + Date.now();
+
+
+  window[callbackName] = function(response) {
+
+    // Remove callback after use
+    delete window[callbackName];
+
+
+    const result =
+      document.getElementById("result");
+
+
+    if (response.success) {
+
+      result.className = "success";
+
+      result.innerHTML =
+        "<div class='name'>" +
+        response.name +
+        "</div>" +
+
+        "<div class='action'>" +
+        response.type +
+        "</div>" +
+
+        "<div>" +
+        response.time +
+        "</div>";
+
+    } else {
+
+      result.className = "error";
+
+      result.innerHTML =
+        response.message;
+
+    }
+
+
+    // Wait before allowing another scan
+    setTimeout(function() {
+
+      result.className = "";
+
+      result.innerHTML =
+        "Ready for next scan...";
+
+      startScanner();
+
+    }, 3000);
+
+  };
+
+
+  const script =
+    document.createElement("script");
+
+
+  const params =
+    new URLSearchParams({
+
+      action: "record",
+
+      employeeId: employeeId,
+
+      token: API_TOKEN,
+
+      callback: callbackName
+
+    });
+
+
+  script.src =
+    API_URL + "?" + params.toString();
+
+
+  script.onerror = function() {
+
+    delete window[callbackName];
+
+    document.getElementById("result").className =
+      "error";
+
+    document.getElementById("result").innerHTML =
+      "Could not connect to attendance server.";
+
+
+    setTimeout(function() {
+
+      startScanner();
+
+    }, 3000);
+
+  };
+
+
+  document.body.appendChild(script);
+
+}
+
+
+// =====================================================
+// QR CODE SCANNED
+// =====================================================
+
+async function onScanSuccess(decodedText) {
+
+  if (scanning) {
+    return;
+  }
+
+  scanning = true;
+
+
+  const employeeId =
+    decodedText.trim();
+
+
+  // Stop camera while processing
+  if (scanner) {
+
+    try {
+
+      await scanner.clear();
+
+    } catch (error) {
+
+      console.log(error);
+
+    }
+
+  }
+
+
+  document.getElementById("result").className = "";
+
+  document.getElementById("result").innerHTML =
+    "Processing...";
+
+
+  sendAttendance(employeeId);
+
+}
+
+
+// =====================================================
+// NORMAL SCANNING ERRORS
+// =====================================================
+
+function onScanFailure(error) {
+
+  // Ignore normal QR scanning failures
+
+}
+
+
+// =====================================================
+// START CAMERA SCANNER
+// =====================================================
+
+function startScanner() {
+
+  scanning = false;
+
+
+  scanner =
+    new Html5Qrcode("reader");
+
+
+  scanner.start(
+
+    {
+      facingMode: "environment"
+    },
+
+    {
+
+      fps: 10,
+
+      qrbox: {
+        width: 250,
+        height: 250
+      }
+
+    },
+
+    onScanSuccess,
+
+    onScanFailure
+
+  ).catch(function(error) {
+
+    document.getElementById("result").className =
+      "error";
+
+    document.getElementById("result").innerHTML =
+      "Camera error: " + error;
+
+  });
+
+}
+
+
+// =====================================================
+// START
+// =====================================================
+
+startScanner();
+
+</script>
+
+</body>
+</html>
