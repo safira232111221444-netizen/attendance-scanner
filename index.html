@@ -31,6 +31,42 @@
       margin-top: 0;
     }
 
+    .buttons {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    button {
+      flex: 1;
+      border: none;
+      border-radius: 10px;
+      padding: 15px 10px;
+      font-size: 18px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    #timeInButton {
+      background: #28a745;
+      color: white;
+    }
+
+    #timeOutButton {
+      background: #dc3545;
+      color: white;
+    }
+
+    button.active {
+      box-shadow: 0 0 0 4px #333 inset;
+    }
+
+    #mode {
+      margin-top: 20px;
+      font-size: 20px;
+      font-weight: bold;
+    }
+
     #reader {
       width: 100%;
       margin-top: 20px;
@@ -64,13 +100,9 @@
       margin-top: 10px;
     }
 
-    button {
-      border: none;
-      border-radius: 10px;
-      padding: 14px 25px;
+    .hours {
+      margin-top: 8px;
       font-size: 18px;
-      cursor: pointer;
-      margin-top: 15px;
     }
 
   </style>
@@ -83,12 +115,41 @@
 
   <h1>Daily Attendance</h1>
 
-  <p>Scan the employee's QR code</p>
+  <p>Select what you want to record:</p>
+
+
+  <div class="buttons">
+
+    <button
+      id="timeInButton"
+      onclick="selectMode('TIME IN')">
+
+      TIME IN
+
+    </button>
+
+
+    <button
+      id="timeOutButton"
+      onclick="selectMode('TIME OUT')">
+
+      TIME OUT
+
+    </button>
+
+  </div>
+
+
+  <div id="mode">
+    Select TIME IN or TIME OUT
+  </div>
+
 
   <div id="reader"></div>
 
+
   <div id="result">
-    Waiting for scanner...
+    Waiting...
   </div>
 
 </div>
@@ -107,7 +168,6 @@ const API_URL =
 
 // =====================================================
 // API TOKEN
-// Must match the token in Apps Script
 // =====================================================
 
 const API_TOKEN =
@@ -115,11 +175,61 @@ const API_TOKEN =
 
 
 let scanner = null;
+
 let scanning = false;
+
+let attendanceMode = null;
 
 
 // =====================================================
-// SEND ATTENDANCE TO GOOGLE APPS SCRIPT
+// SELECT TIME IN / TIME OUT
+// =====================================================
+
+function selectMode(mode) {
+
+  attendanceMode = mode;
+
+
+  const timeInButton =
+    document.getElementById("timeInButton");
+
+  const timeOutButton =
+    document.getElementById("timeOutButton");
+
+
+  timeInButton.classList.remove("active");
+
+  timeOutButton.classList.remove("active");
+
+
+  if (mode === "TIME IN") {
+
+    timeInButton.classList.add("active");
+
+  }
+
+
+  if (mode === "TIME OUT") {
+
+    timeOutButton.classList.add("active");
+
+  }
+
+
+  document.getElementById("mode").innerHTML =
+    "Selected: " + mode;
+
+
+  document.getElementById("result").className = "";
+
+  document.getElementById("result").innerHTML =
+    "Ready to scan...";
+
+}
+
+
+// =====================================================
+// SEND ATTENDANCE
 // =====================================================
 
 function sendAttendance(employeeId) {
@@ -130,7 +240,6 @@ function sendAttendance(employeeId) {
 
   window[callbackName] = function(response) {
 
-    // Remove callback after use
     delete window[callbackName];
 
 
@@ -142,7 +251,26 @@ function sendAttendance(employeeId) {
 
       result.className = "success";
 
+
+      let extra = "";
+
+
+      if (
+        response.totalHours !== undefined &&
+        response.totalHours !== ""
+      ) {
+
+        extra =
+          "<div class='hours'>" +
+          "Total Hours: " +
+          response.totalHours +
+          "</div>";
+
+      }
+
+
       result.innerHTML =
+
         "<div class='name'>" +
         response.name +
         "</div>" +
@@ -153,7 +281,10 @@ function sendAttendance(employeeId) {
 
         "<div>" +
         response.time +
-        "</div>";
+        "</div>" +
+
+        extra;
+
 
     } else {
 
@@ -165,7 +296,7 @@ function sendAttendance(employeeId) {
     }
 
 
-    // Wait before allowing another scan
+    // Allow another scan after 3 seconds
     setTimeout(function() {
 
       result.className = "";
@@ -191,6 +322,8 @@ function sendAttendance(employeeId) {
 
       employeeId: employeeId,
 
+      attendanceType: attendanceMode,
+
       token: API_TOKEN,
 
       callback: callbackName
@@ -206,10 +339,14 @@ function sendAttendance(employeeId) {
 
     delete window[callbackName];
 
-    document.getElementById("result").className =
-      "error";
 
-    document.getElementById("result").innerHTML =
+    const result =
+      document.getElementById("result");
+
+
+    result.className = "error";
+
+    result.innerHTML =
       "Could not connect to attendance server.";
 
 
@@ -228,14 +365,30 @@ function sendAttendance(employeeId) {
 
 
 // =====================================================
-// QR CODE SCANNED
+// QR SCANNED
 // =====================================================
 
 async function onScanSuccess(decodedText) {
 
+  // No mode selected
+  if (!attendanceMode) {
+
+    document.getElementById("result").className =
+      "error";
+
+    document.getElementById("result").innerHTML =
+      "Please select TIME IN or TIME OUT first.";
+
+    return;
+
+  }
+
+
+  // Prevent duplicate scans
   if (scanning) {
     return;
   }
+
 
   scanning = true;
 
@@ -263,7 +416,7 @@ async function onScanSuccess(decodedText) {
   document.getElementById("result").className = "";
 
   document.getElementById("result").innerHTML =
-    "Processing...";
+    "Processing " + attendanceMode + "...";
 
 
   sendAttendance(employeeId);
@@ -272,18 +425,18 @@ async function onScanSuccess(decodedText) {
 
 
 // =====================================================
-// NORMAL SCANNING ERRORS
+// SCANNING ERRORS
 // =====================================================
 
 function onScanFailure(error) {
 
-  // Ignore normal QR scanning failures
+  // Normal scanning failures are ignored
 
 }
 
 
 // =====================================================
-// START CAMERA SCANNER
+// START SCANNER
 // =====================================================
 
 function startScanner() {
